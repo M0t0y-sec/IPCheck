@@ -1,0 +1,577 @@
+/* IPCheck card styling.
+ *
+ * The window is transparent and decoration-less, so every visual affordance
+ * has to come from here. Two constraints shape the whole file:
+ *
+ *   1. The collapsed card must be readable at a glance and cheap to render —
+ *      it sits on screen all day.
+ *   2. Colour carries the verdict, so the palette is semantic rather than
+ *      decorative, and it is defined once as variables that the score bars,
+ *      the dot, and the text all draw from.
+ */
+
+:root {
+  /* Semantic bands, low risk -> high. Used for the dot, bars and accents. */
+  --band-green: #10b981;
+  --band-blue: #3b82f6;
+  --band-yellow: #eab308;
+  --band-orange: #f97316;
+  --band-red: #ef4444;
+
+  /* Surfaces. The window is acrylic (blurred by the OS), so this fill is a
+   * *tint* over that blur, not the blur itself — hence the moderate alpha.
+   * It is deliberately dark so the card reads as intentional over any
+   * background, and opaque enough to stay legible if acrylic is unavailable
+   * (older Windows builds, some RDP sessions, discrete-GPU fallback). */
+  --bg: rgba(13, 18, 29, 0.86);
+  --bg-solid: rgba(20, 24, 33, 0.96);
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --fg: #e8ecf4;
+  --fg-dim: #98a2b8;
+  --fg-faint: #667085;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: transparent;
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system,
+    "Microsoft YaHei UI", sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  /* Fill the window exactly. Without this the card's own width decides the
+   * layout while the OS window decides the clip, and the two drift apart. */
+  width: 100%;
+  height: 100%;
+  /* Text should not be selectable except where we explicitly allow it; the
+   * card is meant to be dragged, not highlighted. */
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Applied by the TS when content exceeds the window's maximum height, so the
+ * card scrolls instead of clipping. Kept off by default so the common case
+ * has no scrollbar. */
+body.scrollable {
+  overflow-y: auto;
+}
+
+body.scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+body.scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+}
+
+.card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  /* No backdrop-filter here on purpose. In a Tauri transparent window the only
+   * thing "behind" the page is the desktop, which the web compositor cannot
+   * sample — so a CSS blur would be a no-op and the card would just read as
+   * dirty glass. Real blur comes from the OS via the `windowEffects` setting
+   * in tauri.conf.json (acrylic); this fill is the tint layered on top of it.
+   * The alpha is tuned to stay legible even if the OS effect is unavailable
+   * (older Windows, remote desktop, discrete GPU fallback). */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.card::before {
+  content: "";
+  display: block;
+  height: 2px;
+  margin: -1px 7px 0;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, var(--band-blue), var(--band-green));
+  opacity: .8;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------- collapsed */
+
+.collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 12px;
+  cursor: default;
+}
+
+.collapsed .flag {
+  /* Windows' Segoe UI Emoji ships no regional-indicator flag glyphs, so a flag
+   * emoji degrades to its two letters ("CN"). Rather than pretend otherwise,
+   * the element is styled as a deliberate two-letter country badge: fixed
+   * width, tabular letters, subtle pill background. It reads the same on every
+   * Windows version and does not look like a broken glyph. */
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  line-height: 1;
+  flex: none;
+  min-width: 26px;
+  padding: 3px 4px;
+  text-align: center;
+  color: var(--fg-dim);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.collapsed .ip {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  /* Long IPv6 needs to shrink rather than wrap the card wider. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 118px;
+}
+
+.chip {
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+  flex: none;
+  transition: background 240ms ease;
+}
+
+.dot[data-band="green"] { background: var(--band-green); box-shadow: 0 0 8px rgba(16, 185, 129, 0.55); }
+.dot[data-band="blue"] { background: var(--band-blue); box-shadow: 0 0 8px rgba(59, 130, 246, 0.55); }
+.dot[data-band="yellow"] { background: var(--band-yellow); box-shadow: 0 0 8px rgba(234, 179, 8, 0.55); }
+.dot[data-band="orange"] { background: var(--band-orange); box-shadow: 0 0 8px rgba(249, 115, 22, 0.55); }
+.dot[data-band="red"] { background: var(--band-red); box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+
+.score {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 22px;
+  text-align: right;
+}
+
+/* The single moment the card is allowed to demand attention. */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); }
+}
+
+.dot.pulse {
+  animation: pulse 620ms ease-in-out 2;
+}
+
+/* ---------------------------------------------------------------- expanded */
+
+.expanded {
+  /* Fill the window rather than declaring a width: the window is already sized
+   * to match, and a fixed width here would fight it after any DPI change. */
+  width: 100%;
+  padding: 12px 14px 10px;
+}
+
+.egress-panel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.egress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.egress-item {
+  min-width: 0;
+  padding: 9px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .035);
+}
+
+.egress-item.international { border-color: rgba(59, 130, 246, .32); background: rgba(59, 130, 246, .08); }
+.egress-label, .egress-item small { display: block; color: var(--fg-faint); font-size: 10px; }
+.egress-item strong {
+  display: block;
+  margin: 4px 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.egress-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.expanded header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  cursor: default;
+  min-width: 0;
+}
+
+.expanded header .flag {
+  /* Same reasoning as the collapsed badge: letters, not a degraded emoji. */
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  flex: none;
+  min-width: 30px;
+  padding: 4px 5px;
+  text-align: center;
+  color: var(--fg-dim);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.expanded header .ip {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+  /* min-width:0 is the load-bearing line: a flex item defaults to
+   * min-width:auto and refuses to shrink below its content, so the ellipsis
+   * never triggers and the text pushes the buttons out of the window. */
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.icon {
+  background: transparent;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+  line-height: 1;
+}
+
+button.icon:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--fg);
+}
+
+button.icon:active {
+  transform: scale(0.94);
+}
+
+button.icon.spin {
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ----------------------------------------------------------------- scores */
+
+.scores {
+  margin-top: 11px;
+}
+
+.score-row {
+  display: grid;
+  /* minmax(0,1fr) rather than 1fr: a grid track's default minimum is auto,
+   * which means a wide number can force the track wider than its share and
+   * push the last cell outside the window. This is the grid equivalent of the
+   * flex min-width:0 fix applied below. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.score-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 2px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.035);
+  min-width: 0;
+}
+
+.score-cell .v {
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-cell .l {
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.bar {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--fg-faint);
+  transition: width 380ms cubic-bezier(0.22, 1, 0.36, 1), background 240ms ease;
+}
+
+/* The other three are "higher is better", so their colour is driven by the
+ * same band the JS computes — never hardcoded. A hardcoded green would render
+ * "可信 33" in the same colour as "可信 100", which is the opposite of what a
+ * colour-coded card is for. */
+.score-cell .bar i[data-band="green"] { background: var(--band-green); }
+.score-cell .bar i[data-band="blue"] { background: var(--band-blue); }
+.score-cell .bar i[data-band="yellow"] { background: var(--band-yellow); }
+.score-cell .bar i[data-band="orange"] { background: var(--band-orange); }
+.score-cell .bar i[data-band="red"] { background: var(--band-red); }
+
+.score-cell .v[data-band="green"] { color: #6ee7b7; }
+.score-cell .v[data-band="blue"] { color: #93c5fd; }
+.score-cell .v[data-band="yellow"] { color: #fde047; }
+.score-cell .v[data-band="orange"] { color: #fdba74; }
+.score-cell .v[data-band="red"] { color: #fca5a5; }
+
+/* ------------------------------------------------------------------ facts */
+
+.facts {
+  margin-top: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fact {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.fact .k {
+  color: var(--fg-faint);
+  width: 44px;
+  flex: none;
+}
+
+.fact .val {
+  color: var(--fg-dim);
+  /* Long ASN/org strings are common ("AS56040 China Cable Television Network")
+   * and must ellipsize, not widen the card. */
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.fact .val[data-alert="true"] {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- checks */
+
+.checks {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.section-title {
+  font-size: 10.5px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 7px;
+}
+
+.section-title.warn {
+  color: #fbbf24;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11.5px;
+  padding: 3px 0;
+  line-height: 1.45;
+  min-width: 0;
+}
+
+.check .mark {
+  width: 13px;
+  flex: none;
+  font-weight: 700;
+  text-align: center;
+}
+
+.check[data-ok="true"] .mark { color: var(--band-green); }
+.check[data-ok="false"] .mark { color: var(--band-red); }
+.check[data-ok="unknown"] .mark { color: var(--fg-faint); }
+
+.check .lbl {
+  color: var(--fg-dim);
+  width: 58px;
+  flex: none;
+}
+
+.check .det {
+  color: var(--fg-faint);
+  min-width: 0;
+  flex: 1;
+  /* Detail strings carry addresses and long explanations; wrap them rather
+   * than letting one long token set the card's width. */
+  overflow-wrap: anywhere;
+}
+
+.check[data-ok="false"] .det {
+  color: #fca5a5;
+}
+
+/* -------------------------------------------------------------- conflicts */
+
+.conflicts {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.24);
+}
+
+.conflict {
+  font-size: 11px;
+  color: #fcd34d;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- sources */
+
+.sources {
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.sources summary {
+  color: var(--fg-faint);
+  cursor: pointer;
+  list-style: none;
+  /* Generous vertical padding: this is the only clickable text in the card and
+   * a 12px line alone is a poor hit target. */
+  padding: 5px 0;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  user-select: none;
+}
+
+.sources summary:hover {
+  color: var(--fg-dim);
+}
+
+.sources summary::-webkit-details-marker {
+  display: none;
+}
+
+.sources summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 140ms ease;
+}
+
+.sources[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.src {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--fg-faint);
+  line-height: 1.45;
+}
+
+.src .nm { width: 74px; flex: none; color: var(--fg-dim); }
+.src .ms { width: 40px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.src .nt { flex: 1; overflow-wrap: anywhere; }
+
+/* Skipped-by-choice reads as deliberately dim, not as a failure. */
+.src[data-state="failed"] .nm { color: var(--fg-faint); }
+.src[data-state="failed"] .nt { opacity: 0.72; }
+.src[data-state="skipped"] { opacity: 0.55; }
+
+/* ----------------------------------------------------------------- footer */
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.conflict-badge {
+  color: #fbbf24;
+}

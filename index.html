@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IPCheck</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <!-- Collapsed: one line, colour is the verdict. -->
+    <div id="collapsed" class="card collapsed" data-drag>
+      <span id="c-flag" class="flag">··</span>
+      <span id="c-ip" class="ip">检测中…</span>
+      <span id="c-type" class="chip">—</span>
+      <span class="spacer"></span>
+      <span id="c-dot" class="dot"></span>
+      <span id="c-score" class="score">—</span>
+    </div>
+
+    <!-- Expanded: the full picture. -->
+    <div id="expanded" class="card expanded hidden">
+      <header data-drag>
+        <span id="e-flag" class="flag">··</span>
+        <span id="e-ip" class="ip">—</span>
+        <!-- No spacer here: the IP already grows (flex:1), and a second
+             flexible sibling would split the free space and truncate the
+             address to "223.160....". The buttons are pushed right by the
+             IP's own growth. -->
+        <button id="btn-copy" class="icon" title="复制 IP">⧉</button>
+        <button id="btn-refresh" class="icon" title="立即刷新">↻</button>
+        <button id="btn-collapse" class="icon" title="收起">▴</button>
+      </header>
+
+      <div id="e-error" class="error hidden"></div>
+
+      <section class="scores">
+        <div class="score-row">
+          <div class="score-cell" data-k="purity">
+            <span class="v" id="s-purity">—</span>
+            <span class="l">纯净</span>
+            <div class="bar"><i id="b-purity"></i></div>
+          </div>
+          <div class="score-cell" data-k="risk">
+            <span class="v" id="s-risk">—</span>
+            <span class="l">风险</span>
+            <div class="bar"><i id="b-risk"></i></div>
+          </div>
+          <div class="score-cell" data-k="confidence">
+            <span class="v" id="s-confidence">—</span>
+            <span class="l">可信</span>
+            <div class="bar"><i id="b-confidence"></i></div>
+          </div>
+          <div class="score-cell" data-k="consistency">
+            <span class="v" id="s-consistency">—</span>
+            <span class="l">一致</span>
+            <div class="bar"><i id="b-consistency"></i></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="facts">
+        <div class="fact"><span class="k">ASN</span><span class="val" id="f-asn">—</span></div>
+        <div class="fact"><span class="k">ISP</span><span class="val" id="f-isp">—</span></div>
+        <div class="fact"><span class="k">位置</span><span class="val" id="f-loc">—</span></div>
+        <div class="fact"><span class="k">时区</span><span class="val" id="f-tz">—</span></div>
+        <div class="fact"><span class="k">黑名单</span><span class="val" id="f-bl">—</span></div>
+      </section>
+
+      <section class="egress-panel">
+        <div class="section-title">分流出口</div>
+        <div class="egress-grid">
+          <div class="egress-item domestic"><span class="egress-label">内地路径</span><strong id="f-domestic-ip">未探测</strong><small id="f-domestic-meta">—</small></div>
+          <div class="egress-item international"><span class="egress-label">外网路径</span><strong id="f-international-ip">未探测</strong><small id="f-international-meta">—</small></div>
+        </div>
+      </section>
+
+      <section class="checks">
+        <div class="section-title">泄漏检测</div>
+        <div id="check-list"></div>
+      </section>
+
+      <section id="conflict-wrap" class="conflicts hidden">
+        <div class="section-title warn">源冲突</div>
+        <div id="conflict-list"></div>
+      </section>
+
+      <details class="sources">
+        <summary>数据源</summary>
+        <div id="source-list"></div>
+      </details>
+
+      <footer>
+        <span id="f-stamp">—</span>
+        <span class="spacer"></span>
+        <span id="f-conflicts" class="conflict-badge hidden"></span>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
