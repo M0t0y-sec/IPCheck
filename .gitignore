@@ -1,6 +1,8 @@
 # Rust
 /src-tauri/target
 **/*.rs.bk
+# Tauri generates the ACL schema from capabilities at build time.
+/src-tauri/gen/schemas
 
 # Node
 node_modules
@@ -10,6 +12,8 @@ dist
 # Local config and artifacts
 .env
 /artifacts
+# Machine-specific Claude Code permissions (absolute paths, local allowlist).
+.claude/settings.local.json
 
 # Editor
 .vscode/
