@@ -1,5 +1,6 @@
 [package]
 name = "ipcheck"
+default-run = "ipcheck"
 version = "0.1.0"
 description = "Realtime IP intelligence floating card"
 edition = "2021"

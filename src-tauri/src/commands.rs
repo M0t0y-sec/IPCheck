@@ -44,10 +44,17 @@ pub fn build_update(prev: Option<&Snapshot>, next: Snapshot, stale: bool, error:
 }
 
 /// Perform one refresh and emit the result to the frontend.
-async fn refresh_once(app: &AppHandle, state: &Arc<AppState>) -> Update {
+///
+/// Public within the crate because the tray menu's "立即刷新" must trigger the
+/// exact same path as the card's button — a second implementation would be a
+/// second thing to keep in sync.
+pub(crate) async fn refresh_now(app: &AppHandle, state: &Arc<AppState>) -> Update {
     let cfg = state.config.read().await.clone();
 
     let snapshot = aggregator::refresh(&state.client, &cfg).await;
+
+    // The tray tooltip is the only visible surface when the card is hidden.
+    crate::tray::update_tooltip(app, &snapshot.ip, snapshot.scores.risk, snapshot.composite);
 
     let mut guard = state.last.write().await;
     let update = build_update(guard.as_ref(), snapshot.clone(), false, None);
@@ -81,7 +88,7 @@ pub async fn get_snapshot(
         }
     }
 
-    Ok(refresh_once(&app, &state).await)
+    Ok(refresh_now(&app, &state).await)
 }
 
 /// Frontend-facing: force a refresh (the ↻ button).
@@ -91,7 +98,7 @@ pub async fn force_refresh(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Update, String> {
     let state = state.inner().clone();
-    Ok(refresh_once(&app, &state).await)
+    Ok(refresh_now(&app, &state).await)
 }
 
 /// Frontend-facing: read config.
@@ -105,12 +112,35 @@ pub async fn get_config(state: State<'_, Arc<AppState>>) -> Result<Config, Strin
 /// let a user spamming save hammer the free tiers.
 #[tauri::command]
 pub async fn set_config(
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
     config: Config,
 ) -> Result<(), String> {
+    // Persist before updating memory: if the write fails we still keep the
+    // value for this session, but the user should not silently lose it on the
+    // next launch, so a failure is reported rather than swallowed.
+    config.save(&app);
     let mut guard = state.config.write().await;
     *guard = config;
     Ok(())
+}
+
+/// Frontend-facing: exit the process. Used by the card's menu.
+///
+/// The window is undecorated and skipped from the taskbar, so this command is
+/// the only in-UI exit; without it the app can only be killed externally.
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+/// Frontend-facing: hide the card, leaving the tray icon (and the refresh
+/// loop) running. Distinct from quitting on purpose.
+#[tauri::command]
+pub fn hide_to_tray(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("card") {
+        let _ = w.hide();
+    }
 }
 
 /// Frontend-facing: the JSON snapshot for a copy-to-clipboard action.
@@ -147,7 +177,7 @@ async fn refresh_loop(app: AppHandle, state: Arc<AppState>) {
             }
         }
 
-        refresh_once(&app, &state).await;
+        refresh_now(&app, &state).await;
     }
 }
 
@@ -171,10 +201,30 @@ pub fn run() {
             force_refresh,
             get_config,
             set_config,
-            export_json
+            export_json,
+            quit_app,
+            hide_to_tray
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
+
+            // Restore persisted settings before the first refresh runs, so the
+            // saved API keys and interval take effect immediately rather than
+            // only after the next tick.
+            let persisted = Config::load(&handle);
+            let state_ref = app.state::<Arc<AppState>>().inner().clone();
+            tauri::async_runtime::block_on(async {
+                *state_ref.config.write().await = persisted;
+            });
+
+            // The tray is the only way back once the card is hidden, and the
+            // only way to quit without Task Manager. Failing to create it
+            // would leave the app uncloseable, so surface the error loudly
+            // instead of continuing silently.
+            if let Err(e) = crate::tray::setup(&handle) {
+                eprintln!("failed to create tray icon: {e}");
+            }
+
             tauri::async_runtime::spawn(async move {
                 refresh_loop(handle, loop_state).await;
             });

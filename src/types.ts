@@ -84,3 +84,15 @@ export interface Update {
   stale: boolean;
   error: string | null;
 }
+
+/** Mirrors `Config` in src-tauri/src/lib.rs. */
+export interface Config {
+  refreshSeconds: number;
+  abuseipdbKey: string;
+  scamalyticsKey: string;
+  ipqsKey: string;
+  enableDnsbl: boolean;
+  enableStun: boolean;
+  enableSources: boolean;
+  label: string;
+}

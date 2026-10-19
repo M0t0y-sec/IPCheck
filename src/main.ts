@@ -9,7 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import type { Band, Snapshot, Update } from "./types";
+import type { Band, Config, Snapshot, Update } from "./types";
 
 // ---------------------------------------------------------------- helpers
 
@@ -305,11 +305,22 @@ async function fitWindow(): Promise<void> {
   // room", which left a transparent dead zone whenever the measured height
   // then matched the previous one and the resize was skipped.
   const contentH = $("expanded").scrollHeight;
-  const target = Math.min(Math.max(contentH, 160), EXPANDED_MAX_H);
+
+  // An absolutely-positioned dropdown does not contribute to its parent's
+  // scrollHeight, so the window has to be grown explicitly to contain it.
+  // Without this the menu is clipped at the card's bottom edge — the same
+  // class of bug as the old hardcoded-height clipping, just for an overlay.
+  const menuEl = $("menu");
+  const menuNeeded = menuEl.classList.contains("hidden")
+    ? 0
+    : menuEl.offsetTop + menuEl.offsetHeight + 12;
+
+  const needed = Math.max(contentH, menuNeeded);
+  const target = Math.min(Math.max(needed, 160), EXPANDED_MAX_H);
 
   // Only scroll when we are genuinely at the ceiling, so the common case has
   // no scrollbar stealing card width.
-  document.body.classList.toggle("scrollable", contentH > EXPANDED_MAX_H);
+  document.body.classList.toggle("scrollable", needed > EXPANDED_MAX_H);
 
   if (target === lastFitH) return;
   lastFitH = target;
@@ -345,6 +356,9 @@ async function setExpanded(on: boolean): Promise<void> {
   // Reset the memo so the first fit after a collapse/expand actually applies;
   // otherwise re-expanding to the same height as last time would be skipped.
   lastFitH = -1;
+  // A previous session may have left the content scrolled down (settings open);
+  // expanding should always start at the header, not mid-card.
+  if (on) document.body.scrollTop = 0;
   if (on && lastSnapshot) renderExpanded(lastSnapshot);
   await fitWindow();
 }
@@ -352,8 +366,11 @@ async function setExpanded(on: boolean): Promise<void> {
 async function doRefresh(): Promise<void> {
   if (refreshing) return;
   refreshing = true;
-  const btn = $("btn-refresh");
-  btn.classList.add("spin");
+  // The stamp is the only always-visible status line; use it rather than
+  // adding a spinner that exists for a fraction of a second.
+  const stamp = $("f-stamp");
+  const previous = stamp.textContent;
+  stamp.textContent = "刷新中…";
   try {
     const u = await invoke<Update>("force_refresh");
     applyUpdate(u);
@@ -361,9 +378,122 @@ async function doRefresh(): Promise<void> {
     const err = $("e-error");
     err.classList.remove("hidden");
     err.textContent = `刷新失败: ${String(e)}`;
+    stamp.textContent = previous ?? "—";
   } finally {
     refreshing = false;
-    btn.classList.remove("spin");
+  }
+}
+
+async function copyIp(): Promise<void> {
+  if (!lastSnapshot) return;
+  try {
+    await navigator.clipboard.writeText(lastSnapshot.ip);
+  } catch {
+    /* clipboard may be unavailable; nothing useful to tell the user */
+  }
+}
+
+// -------------------------------------------------------------------- menu
+
+function menuIsOpen(): boolean {
+  return !$("menu").classList.contains("hidden");
+}
+
+/** Open or close the dropdown, resizing the window to contain it. */
+async function setMenu(open: boolean): Promise<void> {
+  if (menuIsOpen() === open) return;
+  $("menu").classList.toggle("hidden", !open);
+  $("btn-menu").setAttribute("aria-expanded", String(open));
+  // Force the next fit to apply even if the height happens to match.
+  lastFitH = -1;
+  await fitWindow();
+}
+
+function closeMenu(): void {
+  if (menuIsOpen()) void setMenu(false);
+}
+
+async function runMenuAction(action: string): Promise<void> {
+  await setMenu(false);
+  switch (action) {
+    case "copy":
+      await copyIp();
+      break;
+    case "refresh":
+      await doRefresh();
+      break;
+    case "settings":
+      await toggleSettings();
+      break;
+    case "hide":
+      await invoke("hide_to_tray");
+      break;
+    case "quit":
+      // Quitting kills the background monitor too; that is what "退出" means.
+      await invoke("quit_app");
+      break;
+  }
+}
+
+// ---------------------------------------------------------------- settings
+
+async function toggleSettings(): Promise<void> {
+  const el = $("settings");
+  const willShow = el.classList.contains("hidden");
+  el.classList.toggle("hidden", !willShow);
+  if (willShow) await fillSettings();
+  lastFitH = -1;
+  await fitWindow();
+
+  // The card is often already at its height ceiling, so the settings section
+  // can open entirely below the fold. Without this, clicking "设置…" appears
+  // to do nothing at all — verified by clicking it and watching the card stay
+  // visually identical.
+  if (willShow) el.scrollIntoView({ block: "nearest" });
+}
+
+async function fillSettings(): Promise<void> {
+  try {
+    const cfg = await invoke<Config>("get_config");
+    ($("set-interval") as HTMLInputElement).value = String(cfg.refreshSeconds);
+    ($("set-abuse") as HTMLInputElement).value = cfg.abuseipdbKey;
+    ($("set-scam") as HTMLInputElement).value = cfg.scamalyticsKey;
+    ($("set-ipqs") as HTMLInputElement).value = cfg.ipqsKey;
+  } catch {
+    setSettingsStatus("读取配置失败", "err");
+  }
+}
+
+function setSettingsStatus(text: string, kind: "" | "ok" | "err"): void {
+  const el = $("settings-status");
+  el.textContent = text;
+  el.className = `settings-status ${kind}`.trim();
+  if (kind) setTimeout(() => setSettingsStatus("", ""), 2500);
+}
+
+async function saveSettings(): Promise<void> {
+  const interval = Number(($("set-interval") as HTMLInputElement).value);
+  if (!Number.isFinite(interval) || interval < 30 || interval > 3600) {
+    setSettingsStatus("间隔需在 30–3600 秒", "err");
+    return;
+  }
+
+  const cfg: Config = {
+    refreshSeconds: interval,
+    abuseipdbKey: ($("set-abuse") as HTMLInputElement).value.trim(),
+    scamalyticsKey: ($("set-scam") as HTMLInputElement).value.trim(),
+    ipqsKey: ($("set-ipqs") as HTMLInputElement).value.trim(),
+    enableDnsbl: true,
+    enableStun: true,
+    enableSources: true,
+    label: "",
+  };
+
+  try {
+    await invoke("set_config", { config: cfg });
+    setSettingsStatus("已保存", "ok");
+  } catch (e) {
+    setSettingsStatus(`保存失败: ${String(e)}`, "err");
   }
 }
 
@@ -372,25 +502,49 @@ function wireUp(): void {
     if (suppressNextClick) return;
     void setExpanded(true);
   });
+
   $("btn-collapse").addEventListener("click", (e) => {
     e.stopPropagation();
+    closeMenu();
     void setExpanded(false);
   });
-  $("btn-refresh").addEventListener("click", (e) => {
+
+  $("btn-menu").addEventListener("click", (e) => {
     e.stopPropagation();
-    void doRefresh();
+    void setMenu(!menuIsOpen());
   });
-  $("btn-copy").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    if (!lastSnapshot) return;
-    try {
-      await navigator.clipboard.writeText(lastSnapshot.ip);
-      const btn = $("btn-copy");
-      btn.textContent = "✓";
-      setTimeout(() => (btn.textContent = "⧉"), 1100);
-    } catch {
-      /* clipboard may be unavailable; nothing useful to tell the user */
+
+  // Delegated so adding a menu item is a markup-only change.
+  $("menu").addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>(".menu-item");
+    const action = btn?.dataset.action;
+    if (action) {
+      e.stopPropagation();
+      void runMenuAction(action);
     }
+  });
+
+  $("btn-save-settings").addEventListener("click", (e) => {
+    e.stopPropagation();
+    void saveSettings();
+  });
+
+  // A click anywhere outside the dropdown dismisses it.
+  document.addEventListener("mousedown", (e) => {
+    if (!menuIsOpen()) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("#menu") || t.closest("#btn-menu")) return;
+    closeMenu();
+  });
+
+  // Switching to another app should dismiss the menu as well — otherwise it
+  // stays drawn on top of whatever the user moved to.
+  window.addEventListener("blur", closeMenu);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    closeMenu();
+    if (!$("settings").classList.contains("hidden")) void toggleSettings();
   });
 
   // Dragging by the card body, using Tauri's own startDragging so the OS

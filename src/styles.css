@@ -77,7 +77,9 @@ body.scrollable::-webkit-scrollbar-thumb {
 
 .card {
   background: var(--bg);
-  border: 1px solid var(--line);
+  /* Transparent Tauri windows can amplify a normal border into a dark
+   * rectangular frame on Windows. Keep only a very low-contrast edge. */
+  border: 1px solid rgba(255, 255, 255, 0.045);
   border-radius: var(--radius);
   /* No backdrop-filter here on purpose. In a Tauri transparent window the only
    * thing "behind" the page is the desktop, which the web compositor cannot
@@ -86,7 +88,7 @@ body.scrollable::-webkit-scrollbar-thumb {
    * in tauri.conf.json (acrylic); this fill is the tint layered on top of it.
    * The alpha is tuned to stay legible even if the OS effect is unavailable
    * (older Windows, remote desktop, discrete GPU fallback). */
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: none;
 }
 
 .card::before {
@@ -96,7 +98,7 @@ body.scrollable::-webkit-scrollbar-thumb {
   margin: -1px 7px 0;
   border-radius: 0 0 4px 4px;
   background: linear-gradient(90deg, var(--band-blue), var(--band-green));
-  opacity: .8;
+  opacity: .55;
 }
 
 .hidden {
@@ -200,6 +202,8 @@ body.scrollable::-webkit-scrollbar-thumb {
    * to match, and a fixed width here would fight it after any DPI change. */
   width: 100%;
   padding: 12px 14px 10px;
+  /* Anchor for the dropdown menu, which is absolutely positioned. */
+  position: relative;
 }
 
 .egress-panel {
@@ -303,6 +307,143 @@ button.icon.spin {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ------------------------------------------------------------------- menu */
+
+.menu {
+  position: absolute;
+  top: 46px;
+  right: 10px;
+  z-index: 20;
+  min-width: 152px;
+  padding: 5px;
+  /* Near-opaque rather than translucent: it sits on top of card content, and
+   * showing that content through the menu hurts readability more than the
+   * extra blur would help. */
+  background: rgba(22, 27, 38, 0.98);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-item.danger {
+  color: #fca5a5;
+}
+
+.menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+
+/* ---------------------------------------------------------------- settings */
+
+.settings {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11.5px;
+  min-width: 0;
+}
+
+.field-label {
+  width: 74px;
+  flex: none;
+  color: var(--fg-faint);
+}
+
+.field input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 11.5px;
+  padding: 5px 7px;
+  outline: none;
+  user-select: text;
+}
+
+.field input:focus {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.07);
+}
+
+.field-unit {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn {
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 11.5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.btn.primary {
+  background: rgba(59, 130, 246, 0.22);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.btn.primary:hover {
+  background: rgba(59, 130, 246, 0.32);
+}
+
+.settings-status {
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+
+.settings-status.ok { color: #6ee7b7; }
+.settings-status.err { color: #fca5a5; }
 
 .error {
   margin-top: 9px;

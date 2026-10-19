@@ -174,11 +174,20 @@ pub async fn fetch() -> EgressResult {
 
     // Anything that answered with a different address than the winner. Even a
     // single dissenter matters — it usually means a partial proxy.
+    //
+    // Deduplicated: several endpoints commonly see the *same* second address
+    // (a carrier NAT pool, for instance), and listing it once per endpoint
+    // produced messages like "2 个端点返回了不同地址: x.x.x.148, x.x.x.148",
+    // which reads like a bug in the tool rather than a finding.
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let dissenting: Vec<String> = per_endpoint
         .iter()
         .filter_map(|(_, v)| {
             let v = v.trim();
-            (looks_like_ip(v) && Some(v) != best_ip.as_deref()).then(|| v.to_string())
+            if !looks_like_ip(v) || Some(v) == best_ip.as_deref() {
+                return None;
+            }
+            seen.insert(v.to_string()).then(|| v.to_string())
         })
         .collect();
 

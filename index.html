@@ -22,14 +22,20 @@
       <header data-drag>
         <span id="e-flag" class="flag">··</span>
         <span id="e-ip" class="ip">—</span>
-        <!-- No spacer here: the IP already grows (flex:1), and a second
-             flexible sibling would split the free space and truncate the
-             address to "223.160....". The buttons are pushed right by the
-             IP's own growth. -->
-        <button id="btn-copy" class="icon" title="复制 IP">⧉</button>
-        <button id="btn-refresh" class="icon" title="立即刷新">↻</button>
+        <button id="btn-menu" class="icon" title="菜单" aria-haspopup="menu" aria-expanded="false">⋮</button>
         <button id="btn-collapse" class="icon" title="收起">▴</button>
       </header>
+
+      <!-- Dropdown. Absolutely positioned over the card body; the window is
+           resized to contain it while open (see fitWindow in main.ts). -->
+      <nav id="menu" class="menu hidden" role="menu" aria-label="卡片菜单">
+        <button class="menu-item" role="menuitem" data-action="copy">复制 IP</button>
+        <button class="menu-item" role="menuitem" data-action="refresh">立即刷新</button>
+        <button class="menu-item" role="menuitem" data-action="settings">设置…</button>
+        <div class="menu-sep" role="separator"></div>
+        <button class="menu-item" role="menuitem" data-action="hide">隐藏到托盘</button>
+        <button class="menu-item danger" role="menuitem" data-action="quit">退出程序</button>
+      </nav>
 
       <div id="e-error" class="error hidden"></div>
 
@@ -88,6 +94,34 @@
         <summary>数据源</summary>
         <div id="source-list"></div>
       </details>
+
+      <!-- Settings live in the card rather than a second window: the whole
+           app is one small surface, and a separate window would be another
+           thing to position, size and lose. -->
+      <section id="settings" class="settings hidden">
+        <div class="section-title">设置</div>
+        <label class="field">
+          <span class="field-label">刷新间隔</span>
+          <input id="set-interval" type="number" min="30" max="3600" step="30" inputmode="numeric" />
+          <span class="field-unit">秒</span>
+        </label>
+        <label class="field">
+          <span class="field-label">AbuseIPDB</span>
+          <input id="set-abuse" type="password" placeholder="可选 Key" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span class="field-label">Scamalytics</span>
+          <input id="set-scam" type="password" placeholder="可选 Key" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span class="field-label">IPQS</span>
+          <input id="set-ipqs" type="password" placeholder="可选 Key" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="settings-actions">
+          <button id="btn-save-settings" class="btn primary">保存</button>
+          <span id="settings-status" class="settings-status"></span>
+        </div>
+      </section>
 
       <footer>
         <span id="f-stamp">—</span>
